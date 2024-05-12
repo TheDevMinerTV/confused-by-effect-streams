@@ -1,0 +1,6 @@
+services:
+  esdb:
+    image: eventstore/eventstore:23.10.1-jammy
+    container_name: esdb
+    ports: ["2113:2113"]
+    command: --insecure --run-projections=All --enable-atom-pub-over-http

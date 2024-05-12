@@ -1,0 +1,16 @@
+{
+  "name": "confused-by-effect-streams",
+  "module": "index.ts",
+  "type": "module",
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@effect/schema": "^0.67.0",
+    "@eventstore/db-client": "6.1.0",
+    "effect": "^3.1.3"
+  }
+}
