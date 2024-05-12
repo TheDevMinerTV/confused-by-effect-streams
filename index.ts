@@ -1,4 +1,4 @@
-import { BunContext } from '@effect/platform-bun';
+import { BunContext, BunRuntime } from '@effect/platform-bun';
 import { Schema } from '@effect/schema';
 import * as Sql from '@effect/sql';
 import * as Pg from '@effect/sql-pg';
@@ -68,7 +68,11 @@ class EventDB extends Context.Tag('EventDB')<EventDB, Effect.Effect.Success<Retu
 const program = Effect.gen(function* () {
 	const eventDB = yield* EventDB;
 
+	yield* Effect.log('Reading events from test-stream');
+
 	const reader = eventDB.reader(Schema.Struct({}))('test-stream');
+
+	yield* Effect.log('Subscribed to test-stream');
 
 	yield* Stream.runForEach(reader, (event) => Effect.log(event));
 });
@@ -76,6 +80,8 @@ const program = Effect.gen(function* () {
 const EventDBLive = EventDB.Live('localhost:2113');
 
 const SqlLive = Pg.client.layer({
+	host: Config.succeed('localhost'),
+	port: Config.succeed(5432),
 	database: Config.succeed('postgres'),
 	username: Config.succeed('postgres'),
 	password: Config.succeed(Secret.fromString('postgres')),
@@ -86,4 +92,4 @@ const MigratorLive = Pg.migrator.layer({
 }).pipe(Layer.provide(SqlLive));
 const DBLive = Layer.mergeAll(SqlLive, MigratorLive).pipe(Layer.provide(BunContext.layer));
 
-program.pipe(Effect.provide(EventDBLive), Effect.provide(DBLive), Effect.scoped, Effect.runPromise);
+program.pipe(Effect.provide(EventDBLive), Effect.provide(DBLive), Effect.scoped, BunRuntime.runMain);
