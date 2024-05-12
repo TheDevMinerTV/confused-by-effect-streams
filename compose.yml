@@ -4,3 +4,12 @@ services:
     container_name: esdb
     ports: ["2113:2113"]
     command: --insecure --run-projections=All --enable-atom-pub-over-http
+
+  psql:
+    image: postgres:16
+    container_name: psql
+    ports: ["5432:5432"]
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres

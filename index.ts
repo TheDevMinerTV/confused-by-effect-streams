@@ -1,6 +1,10 @@
+import { BunContext } from '@effect/platform-bun';
 import { Schema } from '@effect/schema';
-import { EventStoreDBClient, type EventType, type ReadStreamOptions, type ResolvedEvent } from '@eventstore/db-client';
-import { Context, Data, Effect, Layer, Stream } from 'effect';
+import * as Sql from '@effect/sql';
+import * as Pg from '@effect/sql-pg';
+import { EventStoreDBClient, type ReadStreamOptions } from '@eventstore/db-client';
+import { fileURLToPath } from 'bun';
+import { Config, Context, Data, Effect, Layer, Secret, Stream } from 'effect';
 
 export class EventDBError extends Data.TaggedError('EventDBError')<{
 	message: string;
@@ -25,19 +29,10 @@ const getClient = (url: string) => {
 };
 
 const getReaderResource = (client: EventStoreDBClient, streamName: string, opts?: ReadStreamOptions) => {
-	const FakeEventStream = async function* () {
-		while (true) {
-			yield {} as ResolvedEvent<EventType>;
-		}
-	};
-	const fakeSubscribe = Effect.sync(FakeEventStream);
-
-	const realSubscribe = Effect.try({
+	const subscribe = Effect.try({
 		try: () => client.readStream(streamName, opts),
 		catch: (e) => new EventDBError({ message: `Failed to subscribe to stream: ${e}` })
-	});
-
-	const subscribe = realSubscribe.pipe(Effect.tap(Effect.log(`Reading stream: ${streamName}`)));
+	}).pipe(Effect.tap(Effect.log(`Reading stream: ${streamName}`)));
 
 	return subscribe.pipe(
 		Stream.flatMap((sub) => Stream.fromAsyncIterable(sub, (e) => new EventDBError({ message: `Failed to read from stream: ${e}` })))
@@ -78,4 +73,17 @@ const program = Effect.gen(function* () {
 	yield* Stream.runForEach(reader, (event) => Effect.log(event));
 });
 
-program.pipe(Effect.provide(EventDB.Live('localhost:2113')), Effect.scoped, Effect.runPromise);
+const EventDBLive = EventDB.Live('localhost:2113');
+
+const SqlLive = Pg.client.layer({
+	database: Config.succeed('postgres'),
+	username: Config.succeed('postgres'),
+	password: Config.succeed(Secret.fromString('postgres')),
+});
+const MigratorLive = Pg.migrator.layer({
+	loader: Sql.migrator.fromFileSystem(fileURLToPath(new URL('migrations', import.meta.url))),
+	schemaDirectory: './migrations'
+}).pipe(Layer.provide(SqlLive));
+const DBLive = Layer.mergeAll(SqlLive, MigratorLive).pipe(Layer.provide(BunContext.layer));
+
+program.pipe(Effect.provide(EventDBLive), Effect.provide(DBLive), Effect.scoped, Effect.runPromise);
